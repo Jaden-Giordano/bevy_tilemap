@@ -73,22 +73,20 @@ pub(crate) fn tilemap_events(
                 continue;
             };
             let mut entities = Vec::with_capacity(capacity);
-            for z_order in 0..layers_len {
-                if layers.get(z_order).is_none() {
+            for sprite_order in 0..layers_len {
+                if layers.get(sprite_order).is_none() {
                     continue;
                 }
-                let mut mesh = Mesh::from(&ChunkMesh::new(chunk_dimensions));
-                let (indexes, colors) =
-                    if let Some(parts) = chunk.tiles_to_renderer_parts(z_order, chunk_dimensions) {
-                        parts
-                    } else {
-                        warn!("Can not split tiles to data for the renderer");
-                        continue;
-                    };
+                let mut mesh = Mesh::from(&ChunkMesh::new(
+                    chunk_dimensions,
+                    layers_len as u32,
+                    Vec2::new(0., 0.), // TODO: put actual value here
+                ));
+                let (indexes, colors) = chunk.tiles_to_renderer_parts(chunk_dimensions);
                 mesh.set_attribute(ChunkMesh::ATTRIBUTE_TILE_INDEX, indexes);
                 mesh.set_attribute(ChunkMesh::ATTRIBUTE_TILE_COLOR, colors);
                 let mesh_handle = meshes.add(mesh);
-                chunk.set_mesh(z_order, mesh_handle.clone());
+                chunk.set_mesh(sprite_order, mesh_handle.clone());
 
                 use GridTopology::*;
                 let translation_x = match topology {
@@ -127,12 +125,12 @@ pub(crate) fn tilemap_events(
                             * chunk_dimensions.height as i32) as f32
                     }
                 };
-                let translation = Vec3::new(translation_x, translation_y, z_order as f32);
+                let translation = Vec3::new(translation_x, translation_y, sprite_order as f32);
                 let pipeline = RenderPipeline::new(pipeline_handle.clone_weak().typed());
                 let entity = if let Some(entity) = commands
                     .spawn(ChunkBundle {
                         point,
-                        z_order: ZOrder(z_order),
+                        sprite_order: ZOrder(sprite_order),
                         texture_atlas: texture_atlas.clone_weak(),
                         mesh: mesh_handle.clone_weak(),
                         transform: Transform::from_translation(translation),
@@ -160,7 +158,7 @@ pub(crate) fn tilemap_events(
 
                 info!("Chunk {} spawned", point);
 
-                chunk.add_entity(z_order, entity);
+                chunk.add_entity(sprite_order, entity);
                 entities.push(entity);
             }
             commands.push_children(map_entity, &entities);
@@ -196,7 +194,7 @@ fn spawn_collisions(
     commands: &mut Commands,
     layers: &[Option<TilemapLayer>],
     point: Point2,
-    z_order: usize,
+    sprite_order: usize,
     chunk: &mut Chunk,
     chunk_dimensions: Dimension2,
     tile_dimensions: Dimension2,
@@ -205,7 +203,7 @@ fn spawn_collisions(
     physics_tile_height: f32,
 ) {
     // Don't continue if there is no layer.
-    if let Some(layer_opt) = layers.get(z_order) {
+    if let Some(layer_opt) = layers.get(sprite_order) {
         match layer_opt {
             Some(layer) => {
                 if layer.interaction_groups.0 == 0 {
@@ -216,7 +214,7 @@ fn spawn_collisions(
         }
     }
     // Don't continue if there is no entity.
-    let entity = match chunk.get_entity(z_order) {
+    let entity = match chunk.get_entity(sprite_order) {
         Some(e) => e,
         None => return,
     };
@@ -226,7 +224,7 @@ fn spawn_collisions(
         return;
     }
     let mut collision_entities = Vec::new();
-    if let Some(indices) = chunk.get_tile_indices(z_order) {
+    if let Some(indices) = chunk.get_tile_indices(sprite_order) {
         for index in &indices {
             let point = match chunk_dimensions.decode_point(*index) {
                 Ok(p) => p,
@@ -257,7 +255,7 @@ fn spawn_collisions(
             }
 
             let collision_groups = layers
-                .get(z_order)
+                .get(sprite_order)
                 .and_then(|layer_opt| layer_opt.and_then(|layer| Some(layer.interaction_groups)));
             if let Some(collision_groups) = collision_groups {
                 if collision_groups.with_mask(0).0 != 0 {
@@ -333,12 +331,12 @@ pub(crate) fn tilemap_collision_events(
                 warn!("Can not get chunk at {}, skipping", &point);
                 continue;
             };
-            for z_order in 0..layers_len {
+            for sprite_order in 0..layers_len {
                 spawn_collisions(
                     commands,
                     &layers,
                     point,
-                    z_order,
+                    sprite_order,
                     chunk,
                     chunk_dimensions,
                     tile_dimensions,
@@ -387,7 +385,7 @@ pub(crate) fn tilemap_collision_events(
                     commands,
                     &layers,
                     tile.point,
-                    tile.z_order,
+                    tile.sprite_order,
                     chunk,
                     chunk_dimensions,
                     tile_dimensions,
@@ -413,7 +411,7 @@ pub(crate) fn tilemap_collision_events(
                     commands.despawn(entity);
                     info!(
                         "Tile {} on z order {} collision entity despawned",
-                        tile.point, tile.z_order
+                        tile.point, tile.sprite_order
                     );
                 }
             }

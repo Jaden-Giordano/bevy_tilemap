@@ -14,7 +14,7 @@ pub(crate) fn chunk_update(
     map_query: Query<&Tilemap>,
     mut chunk_query: Query<(&Parent, &Point2, &ZOrder, &Handle<Mesh>), Changed<ModifiedLayer>>,
 ) {
-    for (parent, point, z_order, mesh_handle) in chunk_query.iter_mut() {
+    for (parent, point, sprite_order, mesh_handle) in chunk_query.iter_mut() {
         let tilemap = if let Ok(tilemap) = map_query.get(**parent) {
             tilemap
         } else {
@@ -34,7 +34,7 @@ pub(crate) fn chunk_update(
             return;
         };
         let (indexes, colors) = if let Some((index, colors)) =
-            chunk.tiles_to_renderer_parts(z_order.0, tilemap.chunk_dimensions())
+            chunk.tiles_to_renderer_parts(sprite_order.0, tilemap.chunk_dimensions())
         {
             (index, colors)
         } else {
